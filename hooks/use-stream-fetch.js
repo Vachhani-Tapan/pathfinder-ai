@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 
 /**
  * Custom hook that streams AI responses from the /api/generate SSE endpoint.
@@ -40,7 +40,7 @@ export default function useStreamFetch() {
         return;
       }
 
-      const words = pending.split(/(\s+)/); 
+      const words = pending.match(/\S+\s*/g) || [];
       const take = [];
       let wordCount = 0;
 
@@ -70,6 +70,10 @@ const startStream = useCallback(async (prompt, conversationId = null) => {x
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, 60000);
+
     pendingRef.current = "";
     receivingRef.current = true;
     setStreamedText("");
@@ -92,6 +96,9 @@ const startStream = useCallback(async (prompt, conversationId = null) => {x
         throw new Error(data.error || `Request failed (${response.status})`);
       }
 
+      if (!response.body) {
+        throw new Error("Readable stream not supported");
+      }
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
@@ -113,6 +120,10 @@ const startStream = useCallback(async (prompt, conversationId = null) => {x
 
           if (data === "[DONE]") {
             receivingRef.current = false;
+            // Flush any remaining buffered text
+            if (pendingRef.current && !timerRef.current) {
+              startReleasing();
+            }
             return;
           }
 
@@ -137,7 +148,7 @@ const startStream = useCallback(async (prompt, conversationId = null) => {x
       }
 
       receivingRef.current = false;
-    } catch (err) {
+    }catch (err) {
       if (err.name === "AbortError") {
         receivingRef.current = false;
         setIsLoading(false);
@@ -148,6 +159,9 @@ const startStream = useCallback(async (prompt, conversationId = null) => {x
       receivingRef.current = false;
       setIsLoading(false);
     }
+    finally {
+      clearTimeout(timeoutId);
+}
   }, [startReleasing]);
 
   const reset = useCallback(() => {
@@ -163,6 +177,18 @@ const startStream = useCallback(async (prompt, conversationId = null) => {x
     setStreamedText("");
     setError(null);
     setIsLoading(false);
+  }, []);
+  
+  useEffect(() => {
+  return () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+  };
   }, []);
 
   return { streamedText, isLoading, error, startStream, reset };

@@ -14,7 +14,6 @@ model User {
   name            String?
   imageUrl        String?
   industry        String?
-  industryInsight IndustryInsight? @relation(fields: [industry], references: [industry])
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
@@ -25,9 +24,11 @@ model User {
   // Relations
   skills          String[]
   assessments     Assessment[]
-  resume          Resume?
   coverLetter     CoverLetter[]
   conversations   Conversation[]
+  resume          Resume?
+  industryInsight IndustryInsight? @relation(fields: [industry], references: [industry])
+  atsAnalyses     ATSAnalysis[]
 }
 
 model Assessment {
@@ -73,20 +74,14 @@ model CoverLetter {
 model IndustryInsight {
   id                String   @id @default(cuid())
   industry          String   @unique
-
   users             User[]
-
   salaryRanges      Json[]
-
   growthRate        Float
   demandLevel       String
   topSkills         String[]
-
   marketOutlook     String
   keyTrends         String[]
-
   recommendedSkills String[]
-
   lastUpdated       DateTime @default(now())
   nextUpdate        DateTime
 
@@ -100,7 +95,6 @@ model Conversation {
   title     String
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
-
   messages  Message[]
 
   @@index([userId])
@@ -115,4 +109,22 @@ model Message {
   createdAt      DateTime     @default(now())
 
   @@index([conversationId])
+}
+
+model ATSAnalysis {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  resumeContent   String   @db.Text
+  jobDescription  String   @db.Text
+  jobTitle        String?
+  companyName     String?
+  atsScore        Float
+  matchedKeywords String[]
+  missingKeywords String[]
+  suggestions     Json[]
+  overallFeedback String?  @db.Text
+  createdAt       DateTime @default(now())
+
+  @@index([userId])
 }

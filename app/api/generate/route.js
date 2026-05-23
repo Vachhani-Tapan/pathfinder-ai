@@ -1,9 +1,26 @@
 import { auth } from "@clerk/nextjs/server";
 import { generateGeminiContentStream } from "@/lib/gemini";
 import { db } from "@/lib/prisma";
+import { buildSecurePrompt } from "@/lib/prompt-safety";
 
 export async function POST(request) {
   const { userId } = await auth();
+  const endpoint = "/api/generate";
+  const subject = getRateLimitIdentifier(request, userId);
+  const rateLimit = enforceRateLimit({
+    endpoint,
+    subject,
+    limitPerMinute: userId ? 20 : 5,
+    burstCapacity: userId ? 10 : 5,
+  });
+
+  if (!rateLimit.allowed) {
+    return buildRateLimitResponse({
+      message: "Too Many Requests",
+      retryAfterSeconds: rateLimit.retryAfterSeconds,
+      sse: true,
+    });
+  }
 
   if (!userId) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -42,13 +59,13 @@ export async function POST(request) {
   }
 
   if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
-    return new Response(
-      JSON.stringify({ error: "Prompt is required" }),
-      {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      }
-    );
+    return buildSseErrorResponse("Prompt is required", 400);
+  }
+
+  const promptCheck = preparePromptForGeneration(prompt);
+
+  if (!promptCheck.allowed) {
+    return buildSseErrorResponse(promptCheck.message, promptCheck.status);
   }
 
   const user = await db.user.findUnique({
@@ -107,68 +124,36 @@ export async function POST(request) {
       let fullResponse = "";
 
       try {
-      const restrictedPrompt = `
-You are Pathfinder AI, a professional career guidance assistant.
+        const restrictedPrompt = buildSecurePrompt({
+          task: `You are Pathfinder AI, a professional career guidance assistant.
 
 Your scope includes ALL professional and career-related domains, including:
-- software engineering
-- medicine
-- healthcare
-- law
-- finance
-- accounting
-- banking
-- business
-- management
-- marketing
-- sales
-- design
-- UI/UX
-- architecture
-- education
-- teaching
-- research
-- government jobs
-- civil services
-- entrepreneurship
-- freelancing
-- consulting
-- skilled trades
-- manufacturing
-- logistics
-- human resources
-- customer support
-- media
-- content creation
-- non-technical professions
+- software engineering, medicine, healthcare, law, finance, accounting, banking
+- business, management, marketing, sales, design, UI/UX, architecture
+- education, teaching, research, government jobs, civil services
+- entrepreneurship, freelancing, consulting, skilled trades
+- manufacturing, logistics, human resources, customer support
+- media, content creation, non-technical professions
 
 You help users with:
-- career guidance
-- interview preparation
-- mock interviews
-- resume/CV improvement
-- cover letters
-- job applications
-- job search strategy
-- skill development
-- certification guidance
-- learning roadmaps
-- salary discussions
-- career transitions
-- workplace growth
-- professional development
+- career guidance, interview preparation, mock interviews
+- resume/CV improvement, cover letters, job applications
+- job search strategy, skill development, certification guidance
+- learning roadmaps, salary discussions, career transitions
+- workplace growth, professional development
 
 Rules:
 - Stay focused on careers and professional growth.
 - If the user asks something completely unrelated (jokes, entertainment, random trivia, casual unrelated chat), politely redirect them toward career/professional topics.
 - Be practical, structured, and professional.
-- Give actionable advice.
+- Give actionable advice.`,
+          untrustedData: [
+            { label: "userQuery", value: prompt, maxLength: 4000 },
+          ],
+        });
 
-User Query:
-${prompt}
-`;
+        const result = await generateGeminiContentStream(restrictedPrompt);
 
-const result = await generateGeminiContentStream(restrictedPrompt);
         for await (const chunk of result.stream) {
           const text = chunk.text();
 
@@ -202,18 +187,16 @@ const result = await generateGeminiContentStream(restrictedPrompt);
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
         controller.close();
       } catch (error) {
-        const message =
-          error?.response?.error?.message ||
-          error?.message ||
-          "Unknown Gemini error";
+        console.error("Gemini streaming error:", error?.message || error);
 
-        console.error("Gemini streaming error:", message);
+        controller.enqueue(
+          encoder.encode(
+            `data: ${JSON.stringify({
+              error: error?.message || "Unknown error",
+            })}\n\n`
+          )
+        );
 
-        const errorEvent = `data: ${JSON.stringify({
-          error: message,
-        })}\n\n`;
-
-        controller.enqueue(encoder.encode(errorEvent));
         controller.close();
       }
     },
