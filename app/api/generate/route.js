@@ -60,6 +60,15 @@ export async function POST(request) {
     burstCapacity: userId ? 10 : 5,
   });
 
+  console.info("rate-limit-check", {
+    endpoint,
+    subjectKind: subject.kind,
+    allowed: rateLimit.allowed,
+    remaining: rateLimit.remaining,
+    retryAfterSeconds: rateLimit.retryAfterSeconds,
+    ...(rateLimit.allowed ? {} : { rejectionRate: rateLimit.rejectionRate }),
+  });
+
   if (!rateLimit.allowed) {
     return buildRateLimitResponse({
       message: "Too Many Requests",

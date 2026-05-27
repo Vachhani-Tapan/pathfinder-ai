@@ -67,4 +67,59 @@ describe("useStreamFetch", () => {
 
     warnSpy.mockRestore();
   });
+
+  it("extracts error messages from SSE rate-limit responses", async () => {
+    server.use(
+      http.post("http://localhost/api/generate", () => {
+        return new Response(
+          'event: error\ndata: {"error":"Too Many Requests","retryAfterSeconds":12}\n\n',
+          {
+            status: 429,
+            headers: { "Content-Type": "text/event-stream; charset=utf-8" },
+          }
+        );
+      })
+    );
+
+    const { result } = renderHook(() => useStreamFetch());
+
+    let outcome;
+    await act(async () => {
+      outcome = await result.current.startStream("Write a resume summary");
+    });
+
+    expect(outcome).toEqual({
+      status: "error",
+      error: "Too Many Requests",
+      finalText: "",
+    });
+    expect(result.current.error).toBe("Too Many Requests");
+    expect(result.current.isLoading).toBe(false);
+  });
+
+  it("falls back to message fields for JSON errors", async () => {
+    server.use(
+      http.post("http://localhost/api/generate", () => {
+        return new Response(JSON.stringify({ message: "No prompt provided" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      })
+    );
+
+    const { result } = renderHook(() => useStreamFetch());
+
+    let outcome;
+    await act(async () => {
+      outcome = await result.current.startStream("Write a resume summary");
+    });
+
+    expect(outcome).toEqual({
+      status: "error",
+      error: "No prompt provided",
+      finalText: "",
+    });
+    expect(result.current.error).toBe("No prompt provided");
+    expect(result.current.isLoading).toBe(false);
+  });
 });

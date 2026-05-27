@@ -24,6 +24,34 @@ export default function useStreamFetch() {
 
   const abortControllerRef = useRef(null);
 
+  const parseSseEventBlock = useCallback((block) => {
+    const lines = block.split(/\r?\n/);
+    let event = "message";
+    const dataLines = [];
+
+    for (const rawLine of lines) {
+      const line = rawLine.trimEnd();
+
+      if (!line || line.startsWith(":")) {
+        continue;
+      }
+
+      if (line.startsWith("event:")) {
+        event = line.slice(6).trim() || "message";
+        continue;
+      }
+
+      if (line.startsWith("data:")) {
+        dataLines.push(line.slice(5).trimStart());
+      }
+    }
+
+    return {
+      event,
+      data: dataLines.join("\n"),
+    };
+  }, []);
+
   const failStream = useCallback(
     async (reader, message, details, currentText) => {
       if (isDev) {
@@ -69,8 +97,32 @@ export default function useStreamFetch() {
       });
 
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.error || `Request failed (${response.status})`);
+        const contentType = (response.headers.get("Content-Type") || "").toLowerCase();
+        let parsed = {};
+
+        if (contentType.includes("text/event-stream")) {
+          const rawText = await response.text();
+          const { data } = parseSseEventBlock(rawText);
+
+          if (data) {
+            try {
+              parsed = JSON.parse(data);
+            } catch (parseError) {
+              if (isDev) {
+                console.warn("[useStreamFetch] Failed to parse SSE error payload", parseError, data);
+              }
+            }
+          }
+        } else {
+          parsed = await response.json().catch(() => ({}));
+        }
+
+        const errorMessage =
+          (typeof parsed.error === "string" && parsed.error) ||
+          (typeof parsed.message === "string" && parsed.message) ||
+          `Request failed (${response.status})`;
+
+        throw new Error(errorMessage);
       }
 
       if (!response.body) {
@@ -259,7 +311,7 @@ export default function useStreamFetch() {
       clearTimeout(timeoutId);
       abortControllerRef.current = null;
     }
-  }, [failStream, isDev]);
+  }, [failStream, isDev, parseSseEventBlock]);
 
   const reset = useCallback(() => {
     if (abortControllerRef.current) {
