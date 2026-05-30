@@ -43,6 +43,17 @@
   </a>
 </p>
 
+<p align="center">
+  <a href="https://discord.gg/EhGWV9eud">
+    <img src="https://img.shields.io/badge/💬_Join_Discord_Community-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord Community" />
+  </a>
+</p>
+
+<p align="center">
+  <strong>👥 Contributors, mentors, and community members are welcome!</strong><br/>
+  Join our Discord server for discussions, issue guidance, feature brainstorming, announcements, mentorship, and GSSoC'26 collaboration.
+</p>
+
 <br/>
 
 <p align="center">
@@ -75,6 +86,7 @@
 - [UI/UX Highlights](#-uiux-highlights)
 - [Performance](#-performance)
 - [Roadmap](#-roadmap)
+- [Discord Community](#-discord-community)
 - [Contributing](#-contributing)
 - [Contributors](#-contributors)
 - [License](#-license)
@@ -533,6 +545,38 @@ Want to pick one up? Check [open issues](https://github.com/harshdwivediiiii/pat
 
 ---
 
+## 💬 Discord Community
+
+PathFinder AI has an active Discord community where contributors, mentors, maintainers, and users can collaborate.
+
+<p align="center">
+  <a href="https://discord.gg/EhGWV9eud">
+    <img src="https://img.shields.io/badge/💬_Join_Discord_Community-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord Community" />
+  </a>
+</p>
+
+<p align="center">
+  <strong>👥 Contributors, mentors, and community members are welcome!</strong><br/>
+  Join our Discord server for discussions, issue guidance, feature brainstorming, announcements, mentorship, and GSSoC'26 collaboration.
+</p>
+
+### Why Join?
+
+- 🤝 Connect with contributors and mentors
+- 🚀 Get help with issues and pull requests
+- 💡 Discuss new features and ideas
+- 📢 Receive project announcements and updates
+- 🎯 Find beginner-friendly issues
+- 🏆 Collaborate during GSSoC'26 and other open-source programs
+
+### Join the Server
+
+👉 **Discord Invite:** https://discord.gg/EhGWV9eud
+
+We encourage all contributors and mentors to join before starting work on issues and pull requests.
+
+---
+
 ## 🤝 Contributing
 
 PathFinder AI is actively participating in **GirlScript Summer of Code 2026 (GSSoC'26)** ❤️ and we warmly welcome all contributors — first-timers and veterans alike.
@@ -584,6 +628,18 @@ chore:     build process or tooling
 3. Wait for maintainer assignment before coding
 4. Start work only after you've been officially assigned
 
+### Community Support
+
+Before claiming an issue, join our Discord server and introduce yourself:
+
+👉 https://discord.gg/EhGWV9eud
+
+You can:
+- Ask questions about issues
+- Discuss implementation approaches
+- Connect with mentors and maintainers
+- Receive contribution guidance
+
 **Good comment template:**
 ```
 Hi team 👋 I'd like to work on this issue under GSSoC'26.
@@ -619,6 +675,15 @@ A huge thank you to everyone who has contributed to PathFinder AI! 🙌
 <br/>
 
 > Want your avatar here? [Make a contribution](#-contributing) and join the wall!
+
+---
+
+## 🌐 Community
+
+- GitHub: https://github.com/harshdwivediiiii/pathfinder-ai
+- Discord: https://discord.gg/EhGWV9eud
+
+Contributors, mentors, and community members are always welcome.
 
 ---
 
