@@ -11,9 +11,19 @@ export function ModeToggle() {
   const { theme, setTheme, resolvedTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
   const isAnimating = useRef(false)
+  const tweenRef = useRef(null)
+  const overlayRef = useRef(null)
 
   useEffect(() => {
     setMounted(true)
+    return () => {
+      if (tweenRef.current) {
+        tweenRef.current.kill()
+      }
+      if (overlayRef.current && overlayRef.current.parentNode) {
+        overlayRef.current.parentNode.removeChild(overlayRef.current)
+      }
+    }
   }, [])
 
   if (!mounted) return null
@@ -29,6 +39,7 @@ export function ModeToggle() {
     const { clientX: x, clientY: y } = e
 
     const overlay = document.createElement("div")
+    overlayRef.current = overlay
     
     // Use globals.css colors for background
     overlay.style.backgroundColor = isDark ? "oklch(1 0 0)" : "oklch(0.1 0.01 250)"
@@ -52,20 +63,21 @@ export function ModeToggle() {
     
     const scale = radius
 
-    gsap.to(overlay, {
+    tweenRef.current = gsap.to(overlay, {
       scale: scale,
       duration: 0.6,
       ease: "power2.inOut",
       onComplete: () => {
         setTheme(nextTheme)
         
-        gsap.to(overlay, {
+        tweenRef.current = gsap.to(overlay, {
           opacity: 0,
           duration: 0.4,
           ease: "power2.out",
           onComplete: () => {
-            overlay.remove()
+            if (overlay.parentNode) overlay.remove()
             isAnimating.current = false
+            overlayRef.current = null
           }
         })
       }
