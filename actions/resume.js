@@ -3,11 +3,14 @@
 import { db } from "@/lib/prisma";
 import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
+import { cachedGenerateGeminiContent, RESUME_IMPROVEMENT_CACHE_TTL_MS, generateCacheKey } from "@/lib/cache";
 import { generateGeminiContent } from "@/lib/gemini";
 import { buildSecurePrompt, generateWithStructuredOutput } from "@/lib/prompt-safety";
+import { buildUserProfileContext } from "@/lib/ai-context";
 import { validateInput, validateOutput } from "@/lib/validate";
 import { resumeSaveSchema, resumeImprovementSchema } from "@/lib/schemas/forms";
 import { resumeImprovementOutputSchema, SCHEMA_DESCRIPTIONS } from "@/lib/schemas/outputs";
+import { checkRateLimit, formatResetTime } from "@/lib/rate-limit-actions";
 
 export async function saveResume(rawContent) {
   const { userId } = await auth();
@@ -61,6 +64,16 @@ export async function improveWithAI(rawParams) {
   const { userId } = await auth();
   if (!userId) return { success: false, errors: { _form: ["Sign-in expired. Please authenticate again."] } };
 
+  const limit = await checkRateLimit(userId, "resume");
+  if (!limit.allowed) {
+    return {
+      success: false,
+      errors: {
+        _form: [`Resume improvement limit reached. Resets in ${formatResetTime(limit.resetAt)}.`],
+      },
+    };
+  }
+
   const validation = validateInput(resumeImprovementSchema, rawParams);
   if (!validation.success) return { success: false, errors: validation.errors };
 
@@ -75,6 +88,7 @@ export async function improveWithAI(rawParams) {
   if (!user) return { success: false, errors: { _form: ["User account match could not be checked."] } };
 
   const prompt = buildSecurePrompt({
+    context: buildUserProfileContext(user),
     task: `As an expert resume writer, improve the following description to make it more impactful, quantifiable, and aligned with industry standards.
 
 Requirements:
@@ -94,7 +108,6 @@ Respond ONLY with a valid JSON object in this exact format (no markdown, no code
     untrustedData: [
       { label: "resumeContent", value: current, maxLength: 8000 },
       { label: "type", value: type, maxLength: 200 },
-      { label: "industry", value: user.industry, maxLength: 200 },
     ],
   });
 
@@ -106,7 +119,12 @@ Respond ONLY with a valid JSON object in this exact format (no markdown, no code
       schemaDescription,
       schema: resumeImprovementOutputSchema,
       generateFn: async (p) => {
-        const raw = await generateGeminiContent(p);
+        const raw = p === prompt
+          ? await cachedGenerateGeminiContent(p, {}, {
+              key: generateCacheKey("improve", current, type, user.industry),
+              ttl: RESUME_IMPROVEMENT_CACHE_TTL_MS,
+            })
+          : await generateGeminiContent(p);
         return raw.response.text().trim();
       },
       validateFn: validateOutput,

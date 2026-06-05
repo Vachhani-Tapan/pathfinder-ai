@@ -1,7 +1,10 @@
 import { auth } from "@clerk/nextjs/server";
 import { generateGeminiContentStream } from "@/lib/gemini";
 import { db } from "@/lib/prisma";
+import { isFeatureEnabled } from "@/lib/ai-gating";
 import { buildSecurePrompt } from "@/lib/prompt-safety";
+import { buildUserAiContext } from "@/lib/ai-context";
+import { chatPromptSchema as chatPromptSchemaStr } from "@/lib/schemas/chat";
 import {
   getRateLimitIdentifier,
   enforceRateLimit,
@@ -9,8 +12,11 @@ import {
 } from "@/lib/rate-limit";
 import {
   preparePromptForGeneration,
-  buildSseErrorResponse,
 } from "@/lib/prompt-guard";
+import {
+  buildCorsDeniedResponse,
+  resolveCorsPolicy,
+} from "@/lib/cors";
 import {
   getCachedResponse,
   cacheResponse,
@@ -20,16 +26,33 @@ import {
   deletePendingGenerationRequest,
 } from "@/lib/cache/cache-service";
 import { respondError, respondSseError, ERROR_CODES } from "@/lib/api/error-handler";
-const SSE_HEADERS = {
+import { validateInput, validateId } from "@/lib/validate";
+import { chatPromptSchema } from "@/lib/schemas/forms";
+
+const SSE_BASE_HEADERS = {
   "Content-Type": "text/event-stream; charset=utf-8",
   "Cache-Control": "no-cache, no-store, must-revalidate, no-transform",
   Connection: "keep-alive",
   "X-Accel-Buffering": "no",
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
+function buildSseHeaders(request) {
+  const corsPolicy = resolveCorsPolicy(request);
+
+  if (!corsPolicy.allowed) {
+    return null;
+  }
+
+  const headers = new Headers(SSE_BASE_HEADERS);
+
+  if (corsPolicy.headers) {
+    corsPolicy.headers.forEach((value, key) => {
+      headers.set(key, value);
+    });
+  }
+
+  return headers;
+}
 
 const encodeSseEvent = (encoder, event, payload) => {
   const safePayload = payload ?? {};
@@ -51,15 +74,27 @@ const extractChunkText = (chunk) => {
   }
 };
 
-export async function OPTIONS() {
+export async function OPTIONS(request) {
+  const headers = buildSseHeaders(request);
+
+  if (!headers) {
+    return buildCorsDeniedResponse();
+  }
+
   return new Response(null, {
     status: 204,
-    headers: SSE_HEADERS,
+    headers,
   });
 }
 
 export async function POST(request) {
-  
+  const isDev = process.env.NODE_ENV !== "production";
+
+  const headers = buildSseHeaders(request);
+
+  if (!headers) {
+    return buildCorsDeniedResponse();
+  }
   const { userId } = await auth();
   const endpoint = "/api/generate";
   const subject = getRateLimitIdentifier(request, userId);
@@ -88,12 +123,10 @@ export async function POST(request) {
   }
 
   if (!userId) {
-    return respondSseError(ERROR_CODES.UNAUTHORIZED);
+    return respondSseError(request, ERROR_CODES.UNAUTHORIZED);
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-
-  if (!apiKey) {
+  if (!isFeatureEnabled("chat")) {
     return respondError(ERROR_CODES.INTERNAL_SERVER_ERROR, "GEMINI_API_KEY is not configured");
   }
 
@@ -102,17 +135,32 @@ export async function POST(request) {
 
   try {
     const body = await request.json();
-    prompt = body.prompt;
-    conversationId = body.conversationId;
+
+    const promptValidation = validateInput(chatPromptSchema, { prompt: body.prompt });
+    if (!promptValidation.success) {
+      return respondError(ERROR_CODES.VALIDATION_ERROR, "Invalid prompt", promptValidation.errors);
+    }
+
+    prompt = promptValidation.data.prompt;
+
+    if (body.conversationId !== undefined && body.conversationId !== null && body.conversationId !== "") {
+      const conversationIdValidation = validateId(body.conversationId, "conversationId");
+      if (!conversationIdValidation.success) {
+        return respondError(ERROR_CODES.VALIDATION_ERROR, "Conversation ID is required", conversationIdValidation.errors);
+      }
+      conversationId = conversationIdValidation.data;
+    }
   } catch {
     return respondError(ERROR_CODES.VALIDATION_ERROR, "Invalid request body");
   }
 
-  if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
-    return buildSseErrorResponse("Prompt is required", 400);
+  const validation = chatPromptSchemaStr.safeParse(prompt);
+  if (!validation.success) {
+    return buildSseErrorResponse(validation.error.errors[0].message, 400);
   }
 
-  const promptCheck = preparePromptForGeneration(prompt);
+  const validatedPrompt = validation.data;
+  const promptCheck = preparePromptForGeneration(validatedPrompt);
 
   if (!promptCheck.allowed) {
     return buildSseErrorResponse(promptCheck.message, promptCheck.status);
@@ -257,7 +305,21 @@ export async function POST(request) {
     }
   }
 
-  const encoder = new TextEncoder();
+  const recentMessages = conversationId
+    ? await db.message.findMany({
+        where: {
+          conversationId,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        take: 6,
+        select: {
+          role: true,
+          content: true,
+        },
+      })
+    : [];
 
   let generationCompletionResolve, generationCompletionReject;
   const generationCompletionPromise = new Promise((resolve, reject) => {
@@ -269,21 +331,13 @@ export async function POST(request) {
     async start(controller) {
       let fullResponse = "";
       let streamClosed = false;
+  const aiContext = buildUserAiContext(user, recentMessages.reverse());
+  const clientIp = request.headers.get("x-real-ip") || "anonymous";
+  const cacheUser = userId || clientIp;
 
-      const safeEnqueue = (event, payload) => {
-        if (streamClosed) return;
-        controller.enqueue(encodeSseEvent(encoder, event, payload));
-      };
-
-      const safeClose = () => {
-        if (streamClosed) return;
-        streamClosed = true;
-        controller.close();
-      };
-
-      try {
-        const restrictedPrompt = buildSecurePrompt({
-          task: `You are Pathfinder AI, a professional career guidance assistant.
+  const restrictedPrompt = buildSecurePrompt({
+    context: aiContext.context,
+    task: `You are Pathfinder AI, a professional career guidance assistant.
 
 Your scope includes ALL professional and career-related domains, including:
 - software engineering, medicine, healthcare, law, finance, accounting, banking
@@ -305,14 +359,110 @@ Rules:
 - If the user asks something completely unrelated (jokes, entertainment, random trivia, casual unrelated chat), politely redirect them toward career/professional topics.
 - Be practical, structured, and professional.
 - Give actionable advice.`,
-          untrustedData: [
-            { label: "userQuery", value: promptCheck.prompt, maxLength: 4000 },
-          ],
+    untrustedData: [
+      { label: "userQuery", value: promptCheck.prompt, maxLength: 4000 },
+    ],
+  });
+
+  const existingCachedResponse = await getCachedResponse(
+    cacheUser,
+    restrictedPrompt
+  );
+
+  if (existingCachedResponse) {
+    if (conversationId && (user?.saveChatHistory ?? true)) {
+      try {
+        await db.$transaction(
+          async (tx) => {
+            await tx.message.create({
+              data: {
+                conversationId,
+                role: "assistant",
+                content: existingCachedResponse,
+              },
+            });
+
+            await tx.conversation.update({
+              where: {
+                id: conversationId,
+              },
+              data: {
+                updatedAt: new Date(),
+              },
+            });
+          },
+          { timeout: 10_000 }
+        );
+      } catch (error) {
+        console.error("Cached response persistence failed:", error);
+      }
+    }
+
+    const encoder = new TextEncoder();
+
+    const cachedStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(
+          encodeSseEvent(encoder, "delta", {
+            text: existingCachedResponse,
+            cached: true,
+          })
+        );
+
+        controller.enqueue(
+          encodeSseEvent(encoder, "done", {
+            finalText: existingCachedResponse,
+            hasContent: true,
+            cached: true,
+            ...(isDev && {
+              debug: {
+                ...aiContext.debug,
+                promptContext: aiContext.context,
+              },
+            }),
+          })
+        );
+
+        controller.close();
+      },
+    });
+
+    return new Response(cachedStream, {
+      headers: (() => {
+        const h = new Headers(headers);
+        h.set("X-Cache", "HIT");
+        return h;
+      })(),
+    });
+  }
+
+  const encoder = new TextEncoder();
+  const abortController = new AbortController();
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      let fullResponse = "";
+      let streamClosed = false;
+
+      const safeEnqueue = (event, payload) => {
+        if (streamClosed || abortController.signal.aborted) return;
+        controller.enqueue(encodeSseEvent(encoder, event, payload));
+      };
+
+      const safeClose = () => {
+        if (streamClosed) return;
+        streamClosed = true;
+        controller.close();
+      };
+
+      try {
+        const result = await generateGeminiContentStream(restrictedPrompt, {
+          signal: abortController.signal,
         });
 
-        const result = await generateGeminiContentStream(restrictedPrompt);
-
         for await (const chunk of result.stream) {
+          if (abortController.signal.aborted) break;
+
           const text = extractChunkText(chunk);
 
           if (text) {
@@ -320,6 +470,11 @@ Rules:
             safeEnqueue("delta", { text });
           }
         }
+
+        if (abortController.signal.aborted) {
+          safeClose();
+          return;
+        } 
 
         if (conversationId && fullResponse.trim()) {
           if (user?.saveChatHistory ?? true) {
@@ -361,10 +516,20 @@ Rules:
         safeEnqueue("done", {
           finalText: fullResponse,
           hasContent: Boolean(fullResponse.trim()),
+          ...(isDev && {
+            debug: {
+              ...aiContext.debug,
+              promptContext: aiContext.context,
+            },
+          }),
         });
         safeClose();
         generationCompletionResolve(fullResponse);
       } catch (error) {
+        if (abortController.signal.aborted) {
+          safeClose();
+          return;
+        }
         console.error("Gemini streaming error:", error?.message || error);
 
         safeEnqueue("error", {
@@ -373,6 +538,10 @@ Rules:
         safeClose();
         generationCompletionReject(error);
       }
+    },
+    cancel(reason) {
+      console.warn("SSE stream cancelled by client connection abort:", reason);
+      abortController.abort();
     },
   });
 
@@ -383,6 +552,6 @@ Rules:
   });
 
   return new Response(stream, {
-    headers: SSE_HEADERS,
+    headers,
   });
 }
