@@ -5,13 +5,21 @@ import { auth, clerkClient } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { generateAIInsights } from "./dashboard";
 import { getIndustryInsightRefreshTime } from "@/lib/industry-insights";
+import { validateInput } from "@/lib/validate";
+import { userProfileSchema } from "@/lib/schemas/forms";
 
 /**
  * Updates the current user's profile with industry and other info.
  * `data` is expected to hold: { industry, currentRole?, targetRole?, careerGoals?, experience?, bio?, skills? }
  */
 export async function updateUser(data) {
-  if (!data?.industry) throw new Error("Industry is required");
+  const validation = validateInput(userProfileSchema, data);
+
+  if (!validation.success) {
+    return { success: false, errors: validation.errors };
+  }
+
+  const profileData = validation.data;
 
   const { userId } = await auth();
   if (!userId) throw new Error("Please sign in to complete onboarding");
@@ -26,11 +34,17 @@ export async function updateUser(data) {
     // long-running external calls inside a DB tx (which can cause timeouts).
     let precomputedInsights = null;
     let existingInsight = await db.industryInsight.findUnique({
-      where: { industry: data.industry },
+      where: { industry: profileData.industry },
     });
 
     if (!existingInsight) {
-      precomputedInsights = await generateAIInsights(data.industry, data);
+      try {
+        precomputedInsights = await generateAIInsights(profileData.industry, profileData);
+      } catch (e) {
+        // generateAIInsights already handles fallbacks, but guard here
+        console.error("Failed to generate insights pre-transaction:", e);
+        precomputedInsights = null;
+      }
     }
 
     const result = await db.$transaction(
@@ -56,6 +70,20 @@ export async function updateUser(data) {
           throw new Error(
             "Industry insights are currently unavailable. Please try again."
           );
+        let industryInsight = await tx.industryInsight.findUnique({
+          where: { industry: profileData.industry },
+        });
+
+        if (!industryInsight) {
+          const insights = precomputedInsights ?? (await generateAIInsights(profileData.industry, profileData));
+
+          industryInsight = await tx.industryInsight.create({
+            data: {
+              industry: profileData.industry,
+              ...insights,
+              nextUpdate: getIndustryInsightRefreshTime(),
+            },
+          });
         }
 
         /* ----------------------------------------------
@@ -64,13 +92,13 @@ export async function updateUser(data) {
         const updatedUser = await tx.user.update({
           where: { id: user.id },
           data: {
-            industry: data.industry,
-            currentRole: data.currentRole ?? null,
-            targetRole: data.targetRole ?? null,
-            careerGoals: data.careerGoals ?? null,
-            experience: data.experience,
-            bio: data.bio,
-            skills: data.skills,
+            industry: profileData.industry,
+            currentRole: profileData.currentRole ?? null,
+            targetRole: profileData.targetRole ?? null,
+            careerGoals: profileData.careerGoals ?? null,
+            experience: profileData.experience ?? null,
+            bio: profileData.bio ?? null,
+            skills: profileData.skills ?? [],
           },
         });
 
