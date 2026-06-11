@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useRef, useState } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
@@ -24,11 +24,11 @@ export function CareerRoadmapSection() {
   const drawProgress = useTransform(scrollYProgress, [0, 0.6], [0, 1]);
 
   const pathD = milestones
-    .map((m, i) => `${i === 0 ? "M" : "L"}${m.x} ${m.y}`)
+    .map((m, i) => `${i === 0 ? "M" : "L"}${m.x * 2.8 + 100} ${m.y * 2.8 + 60}`)
     .join(" ");
 
   return (
-    <section ref={ref} id="career-roadmap" className="relative py-8 md:py-12 overflow-hidden">
+    <section ref={ref} id="career-roadmap" className="relative py-32 md:py-48 overflow-hidden">
       <div className="container mx-auto px-4 md:px-6">
         <FadeUp className="max-w-3xl mx-auto text-center mb-20 space-y-4">
           <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-xs font-bold uppercase tracking-widest text-primary">
@@ -44,14 +44,14 @@ export function CareerRoadmapSection() {
         </FadeUp>
 
         <div className="relative mx-auto max-w-4xl">
-          <svg viewBox="0 0 100 100" className="w-full h-auto">
+          <svg viewBox="0 0 500 360" className="w-full h-auto">
             <defs>
               <linearGradient id="roadmapGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" stopColor="oklch(var(--primary) / 0.6)" />
                 <stop offset="100%" stopColor="oklch(var(--primary) / 0.1)" />
               </linearGradient>
               <filter id="glow2">
-                <feGaussianBlur stdDeviation="1" result="blur" />
+                <feGaussianBlur stdDeviation="3" result="blur" />
                 <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
               </filter>
             </defs>
@@ -59,16 +59,16 @@ export function CareerRoadmapSection() {
             <path
               d={pathD}
               fill="none"
-              stroke="oklch(var(--border) / 0.35)"
-              strokeWidth="1"
-              strokeDasharray="2 2"
+              stroke="oklch(var(--border) / 0.3)"
+              strokeWidth="2"
+              strokeDasharray="6 6"
             />
 
             <motion.path
               d={pathD}
               fill="none"
               stroke="url(#roadmapGrad2)"
-              strokeWidth="1.5"
+              strokeWidth="3"
               strokeLinecap="round"
               style={{ pathLength: drawProgress }}
             />
@@ -81,43 +81,46 @@ export function CareerRoadmapSection() {
                 style={{ cursor: "pointer" }}
               >
                 <motion.circle
-                  cx={m.x}
-                  cy={m.y}
-                  r={hovered === i ? 4 : 2}
+                  cx={m.x * 2.8 + 100}
+                  cy={m.y * 2.8 + 60}
+                  r={hovered === i ? 22 : 14}
                   fill="oklch(var(--card) / 1)"
                   stroke={
                     hovered === i
                       ? "oklch(var(--primary) / 1)"
                       : "oklch(var(--border) / 0.8)"
                   }
-                  strokeWidth="0.5"
+                  strokeWidth="2"
                   transition={{ duration: 0.3 }}
                   style={{ filter: hovered === i ? "url(#glow2)" : "none" }}
                 />
                 <motion.circle
-                  cx={m.x}
-                  cy={m.y}
-                  r={1}
+                  cx={m.x * 2.8 + 100}
+                  cy={m.y * 2.8 + 60}
+                  r={6}
                   fill="oklch(var(--primary) / 1)"
                   animate={{ scale: [1, 1.3, 1] }}
                   transition={{ duration: 2, repeat: Infinity, delay: i * 0.3 }}
                 />
-                <foreignObject
-                  x={m.x - 10}
-                  y={m.y + 3}
-                  width="20"
-                  height="15"
-                  style={{ overflow: "visible" }}
+                <text
+                  x={m.x * 2.8 + 100}
+                  y={m.y * 2.8 + 85}
+                  textAnchor="middle"
+                  fill="oklch(var(--foreground) / 1)"
+                  fontSize="12"
+                  fontWeight="700"
                 >
-                  <div className="flex flex-col items-center justify-start pointer-events-none">
-                    <span className="text-[3px] font-bold text-foreground leading-none text-center">
-                      {m.label}
-                    </span>
-                    <span className="text-[2px] text-muted-foreground leading-none text-center mt-0.5">
-                      {m.desc}
-                    </span>
-                  </div>
-                </foreignObject>
+                  {m.label}
+                </text>
+                <text
+                  x={m.x * 2.8 + 100}
+                  y={m.y * 2.8 + 100}
+                  textAnchor="middle"
+                  fill="oklch(var(--muted-foreground) / 0.8)"
+                  fontSize="9"
+                >
+                  {m.desc}
+                </text>
               </g>
             ))}
           </svg>

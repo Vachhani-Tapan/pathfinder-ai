@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { motion, useScroll, useTransform, useSpring } from "framer-motion";
+import { motion, useScroll, useTransform } from "framer-motion";
 import { ArrowRight, Sparkles, ChevronRight, FileText, Target, Briefcase, Star, LineChart, CheckCircle, TrendingUp, BarChart2, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@clerk/nextjs";
@@ -9,10 +9,7 @@ import { useRouter } from "next/navigation";
 import HeroStats from "@/components/HeroStats";
 import { GlobalScrollTracker } from "@/components/GlobalScrollTracker";
 import { ScrollStory } from "@/components/sections/ScrollStory";
-import { CareerRoadmapSection } from "@/components/sections/CareerRoadmapSection";
-import { ResumeShowcase } from "@/components/sections/ResumeShowcase";
-import { InterviewCoachShowcase } from "@/components/sections/InterviewCoachShowcase";
-import { SkillGapSection } from "@/components/sections/SkillGapSection";
+
 import { TestimonialsSection } from "@/components/sections/TestimonialsSection";
 import { PricingSection } from "@/components/sections/PricingSection";
 import { CTASection } from "@/components/sections/CTASection";
