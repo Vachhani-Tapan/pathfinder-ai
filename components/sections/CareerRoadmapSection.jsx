@@ -28,7 +28,7 @@ export function CareerRoadmapSection() {
     .join(" ");
 
   return (
-    <section ref={ref} id="career-roadmap" className="relative py-32 md:py-48 overflow-hidden">
+    <section ref={ref} id="career-roadmap" className="relative py-8 md:py-12 overflow-hidden">
       <div className="container mx-auto px-4 md:px-6">
         <FadeUp className="max-w-3xl mx-auto text-center mb-20 space-y-4">
           <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-xs font-bold uppercase tracking-widest text-primary">
@@ -58,15 +58,14 @@ export function CareerRoadmapSection() {
 
             <path
               d={pathD}
-              fill="none"
-              stroke="oklch(var(--border) / 0.3)"
+              className="fill-transparent stroke-border/30"
               strokeWidth="2"
               strokeDasharray="6 6"
             />
 
             <motion.path
               d={pathD}
-              fill="none"
+              className="fill-transparent"
               stroke="url(#roadmapGrad2)"
               strokeWidth="3"
               strokeLinecap="round"
@@ -84,12 +83,7 @@ export function CareerRoadmapSection() {
                   cx={m.x * 2.8 + 100}
                   cy={m.y * 2.8 + 60}
                   r={hovered === i ? 22 : 14}
-                  fill="oklch(var(--card) / 1)"
-                  stroke={
-                    hovered === i
-                      ? "oklch(var(--primary) / 1)"
-                      : "oklch(var(--border) / 0.8)"
-                  }
+                  className={hovered === i ? "fill-card stroke-primary" : "fill-card stroke-border"}
                   strokeWidth="2"
                   transition={{ duration: 0.3 }}
                   style={{ filter: hovered === i ? "url(#glow2)" : "none" }}
@@ -98,7 +92,7 @@ export function CareerRoadmapSection() {
                   cx={m.x * 2.8 + 100}
                   cy={m.y * 2.8 + 60}
                   r={6}
-                  fill="oklch(var(--primary) / 1)"
+                  className="fill-primary"
                   animate={{ scale: [1, 1.3, 1] }}
                   transition={{ duration: 2, repeat: Infinity, delay: i * 0.3 }}
                 />
@@ -106,9 +100,7 @@ export function CareerRoadmapSection() {
                   x={m.x * 2.8 + 100}
                   y={m.y * 2.8 + 85}
                   textAnchor="middle"
-                  fill="oklch(var(--foreground) / 1)"
-                  fontSize="12"
-                  fontWeight="700"
+                  className="fill-foreground font-bold text-xs"
                 >
                   {m.label}
                 </text>
@@ -116,8 +108,7 @@ export function CareerRoadmapSection() {
                   x={m.x * 2.8 + 100}
                   y={m.y * 2.8 + 100}
                   textAnchor="middle"
-                  fill="oklch(var(--muted-foreground) / 0.8)"
-                  fontSize="9"
+                  className="fill-muted-foreground text-[9px]"
                 >
                   {m.desc}
                 </text>
