@@ -30,7 +30,6 @@ export async function generateSkillGapAnalysis(data) {
       untrustedData: [
         { label: "currentSkills", value: data.currentSkills, maxLength: 1000 },
         { label: "targetRole", value: data.targetRole, maxLength: 200 },
-        { label: "experience", value: data.experience || "Not specified", maxLength: 100 },
         { label: "jobDescription", value: data.jobDescription || "Not provided", maxLength: 3000 },
         { label: "learningDuration", value: data.learningDuration || "1 month", maxLength: 100 },
       ],

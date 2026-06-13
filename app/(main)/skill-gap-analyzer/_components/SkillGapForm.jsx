@@ -33,10 +33,10 @@ import {
 } from "@/components/ui/card";
 
 const formSchema = z.object({
-  currentSkills: z.string().min(2, "Please enter your current skills."),
-  targetRole: z.string().min(2, "Please enter your target role."),
-  jobDescription: z.string().optional(),
-  learningDuration: z.string().min(1, "Please select a learning duration."),
+  currentSkills: z.string().min(2, "Please enter your current skills.").max(1000, "Current skills must be less than 1000 characters."),
+  targetRole: z.string().min(2, "Please enter your target role.").max(200, "Target role must be less than 200 characters."),
+  jobDescription: z.string().max(3000, "Job description must be less than 3000 characters.").optional(),
+  learningDuration: z.string().min(1, "Please select a learning duration.").max(100, "Learning duration must be less than 100 characters."),
 });
 
 export default function SkillGapForm({ onSubmit, isGenerating }) {

@@ -35,7 +35,10 @@ export default function SkillGapAnalyzerPage() {
     setIsGenerating(true);
     try {
       const response = await generateSkillGapAnalysis(formData);
-      setData(response.analysis);
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      setData(response.data?.analysis);
       toast.success("Skill Gap Analysis generated successfully!");
       // Optionally scroll to results here
       window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
