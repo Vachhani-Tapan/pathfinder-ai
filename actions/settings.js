@@ -3,6 +3,8 @@
 import { db } from "@/lib/prisma";
 import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
+import { validateInput } from "@/lib/validate";
+import { userSettingsSchema } from "@/lib/schemas/forms";
 
 async function getUserByClerkId(userId) {
   try {
@@ -36,8 +38,12 @@ function normalizeSettingsInput(data) {
   };
 }
 
-export async function getUserSettings(userId) {
-  if (!userId) return null;
+export async function getUserSettings() {
+  const { userId } = await auth();
+
+  if (!userId) {
+    throw new Error("Unauthorized");
+  }
 
   try {
     const user = await getUserByClerkId(userId);
@@ -49,23 +55,24 @@ export async function getUserSettings(userId) {
     });
 
     return normalizeSettings(settings);
+    });
+
+    return normalizeSettings(existingSettings);
   } catch (error) {
     console.error("[Settings Action] Error in getUserSettings:", error.message);
-    // Return default settings if DB call fails (e.g. table missing)
     return normalizeSettings(null);
   }
 }
 
-export async function updateUserSettings(userId, data) {
-  const { userId: authenticatedUserId } = await auth();
+export async function updateUserSettings(data) {
+  const { userId } = await auth();
 
-  if (!authenticatedUserId || authenticatedUserId !== userId) {
+  if (!userId) {
     throw new Error("Unauthorized");
   }
 
   try {
-    const user = await getUserByClerkId(userId);
-    const settingsData = normalizeSettingsInput(data);
+    const validation = validateInput(userSettingsSchema, data);
 
     const settings = await db.userSettings.upsert({
       where: { userId: user.id },
@@ -74,6 +81,22 @@ export async function updateUserSettings(userId, data) {
         userId: user.id,
         ...settingsData
       },
+    if (!validation.success) {
+      return { success: false, errors: validation.errors };
+    }
+
+    const user = await getUserByClerkId(userId);
+    const settingsData = validation.data;
+
+    const settings = await db.userSettings.upsert({
+      where: {
+        userId: user.id,
+      },
+      create: {
+        userId: user.id,
+        ...settingsData,
+      },
+      update: settingsData,
     });
 
     revalidatePath("/settings");
