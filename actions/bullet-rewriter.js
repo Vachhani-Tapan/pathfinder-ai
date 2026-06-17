@@ -22,6 +22,11 @@ export async function rewriteBullet(rawParams) {
     return { success: false, errors: { _form: ["Sign-in required to use the Bullet Rewriter."] } };
   }
 
+  const validation = validateInput(bulletRewriterSchema, rawParams);
+  if (!validation.success) {
+    return { success: false, errors: validation.errors };
+  }
+
   const limit = await checkRateLimit(userId, "bulletRewriter");
   if (!limit.allowed) {
     return {
@@ -30,11 +35,6 @@ export async function rewriteBullet(rawParams) {
         _form: [`Bullet Rewriter limit reached. Resets in ${formatResetTime(limit.resetAt)}.`],
       },
     };
-  }
-
-  const validation = validateInput(bulletRewriterSchema, rawParams);
-  if (!validation.success) {
-    return { success: false, errors: validation.errors };
   }
 
   const { bulletText, targetRole } = validation.data;
@@ -107,6 +107,6 @@ Respond ONLY with a valid JSON object in this exact format:
     return { success: true, data: result.data };
   } catch (error) {
     console.error("Error rewriting bullet:", error);
-    return { success: false, errors: { _form: [error?.message || "AI pipeline configuration encountered an error."] } };
+    return { success: false, errors: { _form: ["An unexpected error occurred while rewriting your bullet. Please try again later."] } };
   }
 }

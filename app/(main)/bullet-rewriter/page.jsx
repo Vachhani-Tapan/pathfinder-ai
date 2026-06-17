@@ -22,6 +22,7 @@ export default function BulletRewriterPage() {
     if (bulletText.trim().length < 10) return;
     
     setLoading(true);
+    setRewriteData(null);
     try {
       const response = await rewriteBullet({
         bulletText: bulletText.trim(),
