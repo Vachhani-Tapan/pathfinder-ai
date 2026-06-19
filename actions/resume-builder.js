@@ -10,6 +10,7 @@ import { resumeOutputSchema } from "@/lib/schemas/resume";
 import { generateGeminiContent } from "@/lib/gemini";
 import { buildUserProfileContext } from "@/lib/ai-context";
 import { checkRateLimit, formatResetTime } from "@/lib/rate-limit-actions";
+import { EMPTY_HISTORY_RESPONSE } from "@/lib/history-response";
 import { createErrorResponse } from "@/lib/action-errors";
 
 export async function generateResumeContent(jobDescription) {
@@ -111,7 +112,7 @@ export async function generateResumeContent(jobDescription) {
 
 export async function getResumeHistory() {
   const { userId } = await auth();
-  if (!userId) return { success: false, data: [] };
+  if (!userId) return EMPTY_HISTORY_RESPONSE;
 
   const user = await getUserByClerkId(userId);
   if (!user) return { success: false, data: [] };
