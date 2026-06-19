@@ -147,4 +147,38 @@ describe("useStreamFetch", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it("extracts nested error messages from JSON error responses", async () => {
+    server.use(
+      http.post("http://localhost/api/generate", () => {
+        return new Response(
+          JSON.stringify({
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Invalid request body or parameters"
+            }
+          }),
+          {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      })
+    );
+
+    const { result } = renderHook(() => useStreamFetch());
+
+    let outcome;
+    await act(async () => {
+      outcome = await result.current.startStream("Write a resume summary");
+    });
+
+    expect(outcome).toEqual({
+      status: "error",
+      error: "Invalid request body or parameters",
+      finalText: "",
+    });
+    expect(result.current.error).toBe("Invalid request body or parameters");
+    expect(result.current.isLoading).toBe(false);
+  });
 });
